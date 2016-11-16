@@ -2446,6 +2446,11 @@ AC_CONFIG_FILES([Makefile
            doc/Makefile
            doc/doxygen_tl
            ])
+	   
+AC_CONFIG_FILES([
+	mcxx.pc:mcxx.pc.in
+],[],[])
+
 AC_OUTPUT
 
 AS_MKDIR_P([scripts])

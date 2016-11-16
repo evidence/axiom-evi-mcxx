@@ -65,6 +65,7 @@ noinst_LTLIBRARIES =
 noinst_PROGRAMS =
 lib_LTLIBRARIES =
 CLEANFILES =
+DISTCLEANFILES =
 
 BUILT_SOURCES =
 
@@ -87,6 +88,15 @@ AM_CPPFLAGS   += -I@EXTRAE_INCLUDE@
 AM_LDFLAGS  += -L@EXTRAE_LIB@ -lseqtrace
 endif
 
+#############
+##
+#############
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = mcxx.pc
+
+DISTCLEANFILES += $(pkgconfig_DATA)
+EXTRA_DIST += mcxx.pc.in
 
 ##########################################################################
 # gnulib
