@@ -13,21 +13,28 @@ done
     exit 255;
 }
 
-AXIOMEVI_DIR=$AXIOMHOME
-AXIOMEVI_GASNET_DIR=$AXIOMEVI_DIR/axiom-evi-gasnet
-AXIOMEVI_OMPSS_DIR=$AXIOMEVI_DIR/ompss
-AXIOMEVI_BR_DIR=$AXIOMEVI_DIR/axiom-evi-buildroot
-AXIOMEVI_BR_HOST_DIR=$AXIOMEVI_BR_DIR/output/host
-AXIOMEVI_BR_TRG_DIR=$AXIOMEVI_BR_DIR/output/target
+#AXIOMEVI_DIR=$AXIOMHOME
+#AXIOMEVI_GASNET_DIR=$AXIOMEVI_DIR/axiom-evi-gasnet
+#AXIOMEVI_OMPSS_DIR=$AXIOMEVI_DIR/ompss
+#AXIOMEVI_BR_DIR=$AXIOMEVI_DIR/axiom-evi-buildroot
+#AXIOMEVI_BR_HOST_DIR=$AXIOMEVI_BR_DIR/output/host
+#AXIOMEVI_BR_TRG_DIR=$AXIOMEVI_BR_DIR/output/target
+#
+#OUTPUT=$AXIOMHOME/output
 
-OUTPUT=$AXIOMHOME/output
+OUTPUT_DIR=$AXIOMHOME/output
+TARGET_DIR=$(realpath ${OUTPUT_DIR}/target)
+SYSROOT_DIR=$(realpath ${OUTPUT_DIR}/staging)
+HOST_DIR=$(realpath ${OUTPUT_DIR}/host)
 
 BUILD_ID='x86_64-unknown-linux-gnu'
 TARGET_ID='aarch64-buildroot-linux-gnu'
 
-../configure --prefix=$OUTPUT \
+[ -z "$PREFIX" ] && PREFIX=$(HOST_DIR)/usr
+
+../configure --prefix=$PREFIX \
 	     --build=$BUILD_ID --host=$BUILD_ID --target=$TARGET_ID \
-	     --enable-ompss --with-nanox=$OUTPUT \
+	     --enable-ompss --with-nanox=$SYSROOT_DIR/usr \
 	     --disable-float128 --disable-int128 \
 	     --disable-fortran-tests \
 	     --disable-vectorization --disable-analysis \
