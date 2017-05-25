@@ -22,6 +22,19 @@ done
 #
 #OUTPUT=$AXIOMHOME/output
 
+if [ X"$P" = X1 ]; then
+
+TARGET_DIR=$(realpath ${ROOTFS})
+#SYSROOT_DIR=$(realpath ${LINARO}/staging)
+SYSROOT_DIR=$(realpath ${ROOTFS})
+HOST_DIR=$(realpath ${LINARO}/host)
+
+BUILD_ID='x86_64-unknown-linux-gnu'
+TARGET_ID='aarch64-linux-gnu'
+
+export PATH=$HOST_DIR/usr/bin:$PATH
+
+else
 OUTPUT_DIR=$AXIOMHOME/output
 TARGET_DIR=$(realpath ${OUTPUT_DIR}/target)
 SYSROOT_DIR=$(realpath ${OUTPUT_DIR}/staging)
@@ -29,6 +42,7 @@ HOST_DIR=$(realpath ${OUTPUT_DIR}/host)
 
 BUILD_ID='x86_64-unknown-linux-gnu'
 TARGET_ID='aarch64-buildroot-linux-gnu'
+fi
 
 [ -z "$PREFIX" ] && PREFIX=$(HOST_DIR)/usr
 
