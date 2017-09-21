@@ -159,11 +159,6 @@
 "                           a specific compiler profile\n" \
 "  --openmp                 Enables OpenMP support (default)\n" \
 "  --no-openmp              Disables OpenMP support\n" \
-"  --config-file=<file>     Uses <file> as config file.\n" \
-"                           Use --print-config-file to get the\n" \
-"                           default path\n" \
-"  --print-config-file      Prints the path of the default\n" \
-"                           configuration file and finishes.\n" \
 "  --config-dir=<dir>       Sets <dir> as the configuration directory\n" \
 "                           Use --print-config-dir to get the\n" \
 "                           default path\n" \
@@ -377,7 +372,6 @@ typedef enum
     // Keep the following options sorted (but leave OPTION_UNDEFINED as is)
     OPTION_ALWAYS_PREPROCESS,
     OPTION_CONFIG_DIR,
-    OPTION_CONFIG_FILE,
     OPTION_DEBUG_FLAG,
     OPTION_DISABLE_FILE_LOCKING,
     OPTION_DISABLE_GXX_TRAITS,
@@ -431,7 +425,6 @@ typedef enum
     OPTION_PREPROCESSOR_NAME,
     OPTION_PREPROCESSOR_USES_STDOUT,
     OPTION_PRINT_CONFIG_DIR,
-    OPTION_PRINT_CONFIG_FILE,
     OPTION_PROFILE,
     OPTION_SEARCH_INCLUDES,
     OPTION_SEARCH_MODULES,
@@ -457,14 +450,14 @@ struct command_line_long_options command_line_long_options[] =
     {"keep-files",  CLP_NO_ARGUMENT, 'k'},
     {"keep-all-files", CLP_NO_ARGUMENT, 'K'},
     {"output",      CLP_REQUIRED_ARGUMENT, 'o'},
+
     // This option has a chicken-and-egg problem. If we delay till getopt_long
     // to open the configuration file we overwrite variables defined in the
     // command line. Thus "load_configuration" is invoked before command line parsing
-    // and looks for "--config-file" / "-m" in the arguments
-    {"config-file", CLP_REQUIRED_ARGUMENT, OPTION_CONFIG_FILE},
-    // This option has a chicken-and-egg similar to the --config-file.
-    // It is handled in "load_configuration"
+    // and looks for "--profile" and "--config-dir" in the arguments
+    {"config-dir", CLP_REQUIRED_ARGUMENT, OPTION_CONFIG_DIR},
     {"profile", CLP_REQUIRED_ARGUMENT, OPTION_PROFILE},
+
     {"output-dir",  CLP_REQUIRED_ARGUMENT, OPTION_OUTPUT_DIRECTORY},
     {"cc", CLP_REQUIRED_ARGUMENT, OPTION_NATIVE_COMPILER_NAME},
     {"cxx", CLP_REQUIRED_ARGUMENT, OPTION_NATIVE_COMPILER_NAME},
@@ -484,7 +477,6 @@ struct command_line_long_options command_line_long_options[] =
     {"env", CLP_REQUIRED_ARGUMENT, OPTION_SET_ENVIRONMENT},
     {"list-env", CLP_NO_ARGUMENT, OPTION_LIST_ENVIRONMENTS},
     {"list-environments", CLP_NO_ARGUMENT, OPTION_LIST_ENVIRONMENTS},
-    {"print-config-file", CLP_NO_ARGUMENT, OPTION_PRINT_CONFIG_FILE},
     {"print-config-dir", CLP_NO_ARGUMENT, OPTION_PRINT_CONFIG_DIR},
     {"upc", CLP_OPTIONAL_ARGUMENT, OPTION_ENABLE_UPC},
     {"cuda", CLP_NO_ARGUMENT, OPTION_ENABLE_CUDA},
@@ -1145,7 +1137,7 @@ int parse_arguments(int argc, const char* argv[],
                         CURRENT_CONFIGURATION->do_not_link = 1;
                         break;
                     }
-                case OPTION_CONFIG_FILE :
+                case OPTION_PROFILE :
                 case OPTION_CONFIG_DIR:
                     {
                         // These options are handled in "load_configuration"
@@ -1313,10 +1305,6 @@ int parse_arguments(int argc, const char* argv[],
                         exit(EXIT_SUCCESS);
                         break;
                     }
-                case OPTION_PROFILE :
-                    {
-                        break;
-                    }
                 case OPTION_EXTERNAL_VAR :
                     {
                         if (strchr(parameter_info.argument, ':') == NULL)
@@ -1461,12 +1449,6 @@ int parse_arguments(int argc, const char* argv[],
                         {
                             CURRENT_CONFIGURATION->module_out_pattern = uniquestr(parameter_info.argument);
                         }
-                        break;
-                    }
-                case OPTION_PRINT_CONFIG_FILE:
-                    {
-                        printf("Default config file: %s%s\n", compilation_process.home_directory, CONFIG_RELATIVE_PATH);
-                        exit(EXIT_SUCCESS);
                         break;
                     }
                 case OPTION_PRINT_CONFIG_DIR:
@@ -1946,6 +1928,19 @@ static char strprefix(const char* str, const char *prefix)
     return (strncmp(str, prefix, strlen(prefix)) == 0);
 }
 
+// This variable stores the '-std' flag if it was specified in the command line
+static const char* std_version_flag = NULL;
+
+// Default language versions of Mercurium
+static const char* default_mercurium_std_version[] =
+{
+    [SOURCE_LANGUAGE_C]       = "-std=gnu99",
+    // We used to define the default c++ version of Mercurium to c++03, but
+    // Intel C++ Compiler didn't recognize that version...
+    [SOURCE_LANGUAGE_CXX]     = "-std=gnu++98",
+    [SOURCE_LANGUAGE_FORTRAN] = "-std=gnu",
+};
+
 static int parse_special_parameters(int *should_advance, int parameter_index,
         const char* argv[], char dry_run)
 {
@@ -2141,6 +2136,13 @@ static int parse_special_parameters(int *should_advance, int parameter_index,
                         && argument[3] == 'd'
                         && argument[4] == '=')
                 {
+                    CURRENT_CONFIGURATION->explicit_std_version = 1;
+
+                    // We only keep the std version of the configuration that
+                    // was used in the command line
+                    if (dry_run)
+                        std_version_flag = argument;
+
                     if ( strcmp(&argument[5], "c++11") == 0
                             || strcmp(&argument[5], "gnu++11") == 0
                             // Old flags
@@ -2656,7 +2658,6 @@ static void initialize_default_values(void)
 {
     int dummy = 0;
     // Initialize here all default values
-    compilation_process.config_file = strappend(compilation_process.home_directory, CONFIG_RELATIVE_PATH);
     compilation_process.config_dir = strappend(compilation_process.home_directory, DIR_CONFIG_RELATIVE_PATH);
     compilation_process.num_translation_units = 0;
 
@@ -2696,14 +2697,17 @@ static void initialize_default_values(void)
     CURRENT_CONFIGURATION->output_column_width = 132;
 
     // Add openmp as an implicitly enabled
-    parameter_flags_t *new_parameter_flag = NEW0(parameter_flags_t);
+    // SMATEO: is this suff needed anymore??
+    //
+    // printf("adding OpenMP as an implicitly enabled flag\n");
+    // parameter_flags_t *new_parameter_flag = NEW0(parameter_flags_t);
 
-    new_parameter_flag->name = uniquestr("openmp");
-    new_parameter_flag->value = PFV_UNDEFINED;
+    // new_parameter_flag->name = uniquestr("openmp");
+    // new_parameter_flag->value = PFV_UNDEFINED;
 
-    P_LIST_ADD(compilation_process.parameter_flags,
-            compilation_process.num_parameter_flags,
-            new_parameter_flag);
+    // P_LIST_ADD(compilation_process.parameter_flags,
+    //         compilation_process.num_parameter_flags,
+    //         new_parameter_flag);
 
     //num args linker command  = 0
     CURRENT_CONFIGURATION->num_args_linker_command = 0;
@@ -2733,7 +2737,6 @@ static void remove_parameter_from_argv(int i)
 
 static void load_configuration(void)
 {
-    // Solve here the egg and chicken problem of the option --config-file
     int i;
     char restart = 1;
 
@@ -2743,32 +2746,17 @@ static void load_configuration(void)
         restart = 0;
         for (i = 1; i < compilation_process.argc; i++)
         {
-            if (strncmp(compilation_process.argv[i], 
-                        "--config-file=", strlen("--config-file=")) == 0)
-            {
-                const char *config_file = NULL;
-                config_file = compilation_process.config_file = 
-                    uniquestr(&(compilation_process.argv[i][strlen("--config-file=") ]));
-
-                // Load the configuration file at this point should the user have
-                // specified more than one config file
-                load_configuration_file(config_file);
-
-                remove_parameter_from_argv(i);
-                restart = 1;
-                break;
-            }
-            else if (strncmp(compilation_process.argv[i], 
+            if (strncmp(compilation_process.argv[i],
                         "--config-dir=", strlen("--config-dir=")) == 0)
             {
-                compilation_process.config_dir = 
+                compilation_process.config_dir =
                     uniquestr(&(compilation_process.argv[i][strlen("--config-dir=") ]));
 
                 remove_parameter_from_argv(i);
                 restart = 1;
                 break;
             }
-            else if (strncmp(compilation_process.argv[i], 
+            else if (strncmp(compilation_process.argv[i],
                         "--profile=", strlen("--profile=")) == 0)
             {
                 // Change the basename, from now it will look like the compiler
@@ -2871,6 +2859,58 @@ static void load_configuration(void)
     compilation_process.command_line_configuration = CURRENT_CONFIGURATION;
 }
 
+static void add_std_flag_to_configurations()
+{
+    int i;
+    for (i = 0; i < compilation_process.num_configurations; i++)
+    {
+        struct compilation_configuration_tag* configuration = compilation_process.configuration_set[i];
+
+        // If the configuration explicitly specifies a '-std' flag, do nothing
+        if (configuration->explicit_std_version)
+            continue;
+
+        // Skip the 'cuda' profile since NVCC doesn't support the '-std' flag
+        if (configuration ==
+                get_sublanguage_configuration(SOURCE_SUBLANGUAGE_CUDA, /* fallback */ NULL))
+            continue;
+
+        const char* local_std_flag = NULL;
+
+        // If the user specified a '-std' flag
+        if (std_version_flag != NULL
+                // and that flag was specicied in a configuration that has
+                // the same base language than the current one
+                && configuration->source_language == CURRENT_CONFIGURATION->source_language)
+        {
+            local_std_flag = std_version_flag;
+        }
+        else
+        {
+            if (configuration->source_language == SOURCE_LANGUAGE_C
+                    || configuration->source_language == SOURCE_LANGUAGE_CXX)
+            {
+                local_std_flag = default_mercurium_std_version[configuration->source_language];
+            }
+            else if (configuration->source_language == SOURCE_LANGUAGE_FORTRAN)
+            {
+                // '-std=XYZ' flag doesn't exist in IFORT :_( If not specifying the standard version is a
+                // problem at some point, probably we should fix it modyfing our profiles.
+            }
+            else
+            {
+                // Profiles that don't define a source language should be ignored (e.g. omp-base)
+            }
+        }
+
+        if (local_std_flag != NULL)
+        {
+            add_to_parameter_list_str(&configuration->preprocessor_options, local_std_flag);
+            add_to_parameter_list_str(&configuration->native_compiler_options, local_std_flag);
+            add_to_linker_command_configuration(local_std_flag, NULL, configuration);
+        }
+    }
+}
 static void commit_configuration(void)
 {
     // For every configuration commit its options depending on flags
@@ -2924,6 +2964,8 @@ static void commit_configuration(void)
         finalize_committed_configuration(configuration);
     }
 
+    add_std_flag_to_configurations();
+
     DEBUG_CODE()
     {
         if (!CURRENT_CONFIGURATION->disable_sizeof)
@@ -2950,7 +2992,8 @@ static void finalize_committed_configuration(compilation_configuration_t* config
     }
     if (!found)
     {
-        internal_error("'openmp' implicit flag was not properly registered", 0);
+        configuration->enable_openmp = 0;
+        //internal_error("'openmp' implicit flag was not properly registered", 0);
     }
 
     // OpenMP support involves omp pragma
@@ -3201,7 +3244,7 @@ static void compile_every_translation_unit_aux_(int num_translation_units,
                 parse_translation_unit(translation_unit, parsed_filename);
                 // The scanner automatically closes the file
 
-                if (debug_options.print_parse_tree)
+                if (debug_options.print_ast_graphviz)
                 {
                     fprintf(stderr, "Printing parse tree in graphviz format\n");
 
@@ -4423,7 +4466,8 @@ static void embed_files(void)
         compilation_file_process_t** secondary_translation_units = 
             compilation_process.translation_units[i]->secondary_translation_units;
 
-        const char* extension = get_extension_filename(compilation_process.translation_units[i]->translation_unit->input_filename);
+        translation_unit_t* translation_unit = compilation_process.translation_units[i]->translation_unit;
+        const char* extension = get_extension_filename(translation_unit->input_filename);
         struct extensions_table_t* current_extension = fileextensions_lookup(extension, strlen(extension));
 
         // We do not have to embed linker data
@@ -4433,7 +4477,7 @@ static void embed_files(void)
         {
             continue;
         }
-        const char *output_filename = compilation_process.translation_units[i]->translation_unit->output_filename;
+        const char *output_filename = translation_unit->output_filename;
 
         if (CURRENT_CONFIGURATION->verbose)
         {
@@ -4512,6 +4556,12 @@ static void embed_files(void)
                         multifile_embed_bfd_single(embed_data, secondary_compilation_file);
                         break;
                     }
+                case EMBEDDING_MODE_PARTIAL_LINKING:
+                    {
+                        multifile_embed_partial_linking_single(
+                                embed_data, secondary_compilation_file, output_filename);
+                        break;
+                    }
                 default:
                     internal_error("Unknown embedding mode", 0);
             }
@@ -4526,6 +4576,12 @@ static void embed_files(void)
                 case EMBEDDING_MODE_BFD:
                     {
                         multifile_embed_bfd_collective(&(embed_mode_data[j]), output_filename);
+                        break;
+                    }
+                case EMBEDDING_MODE_PARTIAL_LINKING:
+                    {
+                        // We don't need to do anything, secondary translation units
+                        // are already embedded in the output linker object
                         break;
                     }
                 default:

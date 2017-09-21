@@ -32,16 +32,15 @@
 
 #include <stack>
 
+#include "tl-lexer.hpp"
 #include "tl-nodecl.hpp"
 #include "tl-compilerphase.hpp"
+#include "tl-pragmasupport.hpp"
 
 #include "tl-omp.hpp"
-#include "tl-pragmasupport.hpp"
-#include "tl-omp-tasks.hpp"
-
+#include "tl-omp-reduction.hpp"
 #include "tl-ompss-target.hpp"
 
-#include "tl-lexer.hpp"
 namespace TL
 {
     namespace OpenMP
@@ -67,23 +66,40 @@ namespace TL
                 void register_omp_constructs();
                 void register_oss_constructs();
 
+                void bind_omp_constructs();
+                void bind_oss_constructs();
+
                 // Handler functions
-#define OMP_DIRECTIVE(_directive, _name, _pred) \
-                void _name##_handler_pre(TL::PragmaCustomDirective); \
-                void _name##_handler_post(TL::PragmaCustomDirective);
-#define OMP_CONSTRUCT(_directive, _name, _pred) \
-                void _name##_handler_pre(TL::PragmaCustomStatement); \
-                void _name##_handler_post(TL::PragmaCustomStatement); \
-                void _name##_handler_pre(TL::PragmaCustomDeclaration); \
-                void _name##_handler_post(TL::PragmaCustomDeclaration); 
-#define OMP_CONSTRUCT_NOEND(_directive, _name, _pred) \
-                OMP_CONSTRUCT(_directive, _name, _pred)
+#define DECL_DIRECTIVE(_directive, _name, _pred, _func_prefix) \
+                void _func_prefix##_name##_handler_pre(TL::PragmaCustomDirective); \
+                void _func_prefix##_name##_handler_post(TL::PragmaCustomDirective);
+
+#define DECL_CONSTRUCT(_directive, _name, _pred, _func_prefix) \
+                void _func_prefix##_name##_handler_pre(TL::PragmaCustomStatement); \
+                void _func_prefix##_name##_handler_post(TL::PragmaCustomStatement); \
+                void _func_prefix##_name##_handler_pre(TL::PragmaCustomDeclaration); \
+                void _func_prefix##_name##_handler_post(TL::PragmaCustomDeclaration);
+
+#define OMP_DIRECTIVE(_directive, _name, _pred) DECL_DIRECTIVE(_directive, _name, _pred, /*empty_prefix*/ )
+#define OMP_CONSTRUCT(_directive, _name, _pred) DECL_CONSTRUCT(_directive, _name, _pred, /*empty_prefix*/)
+#define OMP_CONSTRUCT_NOEND(_directive, _name, _pred) OMP_CONSTRUCT(_directive, _name, _pred)
 #include "tl-omp-constructs.def"
                 // Section is special
                 OMP_CONSTRUCT("section", section, true)
 #undef OMP_CONSTRUCT
 #undef OMP_CONSTRUCT_NOEND
 #undef OMP_DIRECTIVE
+
+#define OSS_DIRECTIVE(_directive, _name, _pred) DECL_DIRECTIVE(_directive, _name, _pred, oss_)
+#define OSS_CONSTRUCT(_directive, _name, _pred) DECL_CONSTRUCT(_directive, _name, _pred, oss_)
+#define OSS_CONSTRUCT_NOEND(_directive, _name, _pred) OSS_CONSTRUCT(_directive, _name, _pred)
+#include "tl-oss-constructs.def"
+#undef OSS_CONSTRUCT
+#undef OSS_CONSTRUCT_NOEND
+#undef OSS_DIRECTIVE
+
+#undef DECL_DIRECTIVE
+#undef DECL_CONSTRUCT
 
                 static bool _constructs_already_registered;
                 static bool _reductions_already_registered;
@@ -224,7 +240,7 @@ namespace TL
 
                 void loop_handler_pre(TL::PragmaCustomStatement construct,
                         Nodecl::NodeclBase loop,
-                        void (Core::*common_loop_handler)(Nodecl::NodeclBase,
+                        void (Core::*common_loop_handler)(TL::PragmaCustomStatement,
                             Nodecl::NodeclBase, DataEnvironment&, ObjectList<Symbol>&));
 
                 void handle_map_clause(TL::PragmaCustomLine pragma_line,
@@ -246,13 +262,13 @@ namespace TL
                         ObjectList<Symbol>& extra_symbols);
 
                 void common_for_handler(
-                        Nodecl::NodeclBase outer_statement,
+                        TL::PragmaCustomStatement custom_statement,
                         Nodecl::NodeclBase nodecl,
                         DataEnvironment& data_environment,
                         ObjectList<Symbol>& extra_symbols);
 
                 void common_while_handler(
-                        Nodecl::NodeclBase outer_statement,
+                        TL::PragmaCustomStatement custom_statement,
                         Nodecl::NodeclBase statement,
                         DataEnvironment& data_environment,
                         ObjectList<Symbol>& extra_symbols);
@@ -274,8 +290,6 @@ namespace TL
 
                 void fix_sections_layout(TL::PragmaCustomStatement construct, const std::string& pragma_name);
 
-                void collapse_check_loop(TL::PragmaCustomStatement construct);
-
                 void parse_declare_reduction(ReferenceScope ref_sc, const std::string& declare_reduction_src, bool is_builtin);
                 void parse_declare_reduction(ReferenceScope ref_sc, Source declare_reduction_src, bool is_builtin);
                 void parse_declare_reduction(ReferenceScope ref_sc,
@@ -293,18 +307,14 @@ namespace TL
 
                 void sanity_check_for_loop(Nodecl::NodeclBase);
 
-                bool _discard_unused_data_sharings;
-                bool _allow_shared_without_copies;
-                bool _allow_array_reductions;
                 bool _ompss_mode;
                 bool _copy_deps_by_default;
                 bool _untied_tasks_by_default;
-
-                // This variable is used to enable the experimental support of input by value dependences
-                bool _enable_input_by_value_dependences;
-
-                // This variable is used to enable the experimental support of nonvoid function tasks
-                bool _enable_nonvoid_function_tasks;
+                bool _discard_unused_data_sharings;
+                bool _allow_shared_without_copies;
+                bool _allow_array_reductions;
+                bool _enable_input_by_value_dependences; // EXPERIMENTAL
+                bool _enable_nonvoid_function_tasks;     // EXPERIMENTAL
 
                 // States if we have seen a declare target
                 bool _inside_declare_target;
@@ -324,36 +334,22 @@ namespace TL
                 //! Used when parsing declare reduction
                 static bool _silent_declare_reduction;
 
-                void set_discard_unused_data_sharings(bool b) { _discard_unused_data_sharings = b; }
+                //! Returns whether the current programming model is OmpSs
+                bool in_ompss_mode() const;
 
-                void set_allow_shared_without_copies(bool b) { _allow_shared_without_copies = b; }
+                //! Returns whether tasks should be untied by default
+                bool untied_tasks_by_default() const;
 
-                void set_allow_array_reductions(bool b) { _allow_array_reductions = b; }
-
-                void set_enable_input_by_value_dependences(bool b) { _enable_input_by_value_dependences = b; }
-
-                void set_enable_nonvoid_function_tasks(bool b) { _enable_nonvoid_function_tasks = b; }
-
-                void set_ompss_mode(bool b) { _ompss_mode = b; }
-                bool in_ompss_mode() const
-                {
-                    return _ompss_mode;
-                }
-
-                void set_copy_deps_by_default(bool b) { _copy_deps_by_default = b; }
-                bool copy_deps_by_default() const
-                {
-                    return _copy_deps_by_default;
-                }
-
-                void set_untied_tasks_by_default(bool b) { _untied_tasks_by_default = b; }
-                bool untied_tasks_by_default() const
-                {
-                    return _untied_tasks_by_default;
-                }
+                /* These methods are used from Base::Base() to parse the TL::Core phase flags */
+                void set_ompss_mode_from_str(const std::string& str);
+                void set_copy_deps_from_str(const std::string& str);
+                void set_untied_tasks_by_default_from_str(const std::string& str);
+                void set_discard_unused_data_sharings_from_str(const std::string& str);
+                void set_allow_shared_without_copies_from_str(const std::string& str);
+                void set_allow_array_reductions_from_str(const std::string& str);
+                void set_enable_input_by_value_dependences_from_str(const std::string& str);
+                void set_enable_nonvoid_function_tasks_from_str(const std::string& str);
         };
-
-        bool is_scalar_type(TL::Type t);
 
         Nodecl::NodeclBase get_statement_from_pragma(
                 const TL::PragmaCustomStatement& construct);

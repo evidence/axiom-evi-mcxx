@@ -201,17 +201,19 @@ lib_LTLIBRARIES += \
 
 # Overall process library containing global data
 src_frontend_libmcxx_process_la_CFLAGS=-std=gnu99 \
-						  -DLIBMCXXPROCESS_DLL_EXPORT \
+			  -DLIBMCXXPROCESS_DLL_EXPORT \
                           -I$(top_srcdir)/lib \
+			  -I$(top_srcdir)/support/gperf \
+			  -I$(top_builddir)/support/gperf \
                           -I$(top_srcdir)/src/driver \
                           -I$(top_srcdir)/src/frontend \
                           -I$(top_srcdir)/src/frontend/fortran \
                           -I$(top_srcdir)/src/mcxx_tl \
-                          -I./lib \
-                          -I./src/driver \
-                          -I./src/frontend \
-                          -I./src/frontend/fortran \
-                          -I./src/mcxx_tl \
+                          -I$(top_builddir)/lib \
+                          -I$(top_builddir)/src/driver \
+                          -I$(top_builddir)/src/frontend \
+                          -I$(top_builddir)/src/frontend/fortran \
+                          -I$(top_builddir)/src/mcxx_tl \
                           $(END)
 
 src_frontend_libmcxx_process_la_LDFLAGS=-avoid-version $(no_undefined)
@@ -358,20 +360,23 @@ EXTRA_DIST += src/frontend/dll-exports.def
 src_frontend_libmcxx_la_LDFLAGS = $(dll_exports) -avoid-version $(no_undefined)
 
 cfrontend_cflags = \
-					-std=gnu99 \
-					-DLIBMCXX_DLL_EXPORT \
-                    -Wall \
-					-Wshadow \
-					-Wextra \
-				    -I$(top_srcdir)/lib \
-				    -I$(top_srcdir)/src/driver \
-					-I$(top_srcdir)/src/mcxx_tl \
-					-I$(top_srcdir)/src/frontend \
-					-I$(top_srcdir)/src/frontend/fortran \
-					-I./src/frontend \
-					-I./src/frontend/fortran \
-                    -fexceptions \
-				    -DPKGDATADIR=\"$(pkgdatadir)\"
+		   -std=gnu99 \
+		   -DLIBMCXX_DLL_EXPORT \
+		   -Wall \
+		   -Wshadow \
+		   -Wextra \
+		   -I$(top_srcdir)/lib \
+		   -I$(top_srcdir)/support/gperf \
+		   -I$(top_builddir)/support/gperf \
+		   -I$(top_srcdir)/src/driver \
+		   -I$(top_srcdir)/src/mcxx_tl \
+		   -I$(top_srcdir)/src/frontend \
+		   -I$(top_srcdir)/src/frontend/fortran \
+		   -I./src/frontend \
+		   -I./src/frontend/fortran \
+		   -fexceptions \
+		   -DPKGDATADIR=\"$(pkgdatadir)\"
+
 src_frontend_libmcxx_la_CFLAGS = $(cfrontend_cflags)
 
 noinst_LTLIBRARIES += src/frontend/libgccbuiltins.la
@@ -784,6 +789,8 @@ src_frontend_fortran_libmf03_la_CFLAGS = \
 					-Wshadow \
 					-Wextra \
 				    -I$(top_srcdir)/lib \
+				    -I$(top_srcdir)/support/gperf \
+				    -I$(top_builddir)/support/gperf \
 				    -I$(top_srcdir)/src/frontend \
 				    -I$(top_srcdir)/src/frontend/fortran \
 				    -I$(top_srcdir)/src/mcxx_tl \
@@ -817,6 +824,8 @@ src_frontend_fortran_libmf03_prescanner_la_CFLAGS = \
 					-Wshadow \
 					-Wextra \
 				    -I$(top_srcdir)/lib \
+				    -I$(top_srcdir)/support/gperf \
+				    -I$(top_builddir)/support/gperf \
 				    -I$(top_srcdir)/src/frontend \
 				    -I$(top_srcdir)/src/frontend/fortran \
 				    -I$(top_builddir)/src/frontend \
@@ -929,6 +938,8 @@ BUILT_SOURCES += src/tl/tl-nodecl.cpp
 CLEANFILES += src/tl/tl-lexer-tokens.hpp
 
 TL_COMMON_CFLAGS = -DLIBTL_DLL_EXPORT -Wall \
+    -I$(top_srcdir)/support/gperf \
+    -I$(top_builddir)/support/gperf \
     -I $(top_srcdir)/src/tl/ \
     -I $(top_srcdir)/src/tl/codegen/common \
     -I $(top_srcdir)/src/tl/codegen/base/cxx \
@@ -1076,6 +1087,8 @@ src_tl_libtl_la_LIBADD = \
 
 ## TL common flags
 tl_cflags= -Wall -Wshadow \
+    -I$(top_srcdir)/support/gperf \
+    -I$(top_builddir)/support/gperf \
     -I $(top_srcdir)/src/tl/codegen/common \
     -I $(top_srcdir)/src/tl/codegen/vector \
     -I $(top_srcdir)/src/tl/codegen/base/cxx \
@@ -1158,6 +1171,10 @@ src_tl_omp_common_libtlomp_common_la_SOURCES = \
    src/tl/omp/common/tl-datareference.cpp \
    src/tl/omp/common/tl-final-stmts-generator.hpp \
    src/tl/omp/common/tl-final-stmts-generator.cpp \
+   src/tl/omp/common/tl-atomics.hpp \
+   src/tl/omp/common/tl-atomics.cpp \
+   src/tl/omp/common/tl-lowering-utils.hpp \
+   src/tl/omp/common/tl-lowering-utils.cpp \
    $(END)
 
 ##########################################################################
@@ -1256,14 +1273,15 @@ PCFG_COMMON_FLAGS= $(tl_cflags) \
         -I $(srcdir)/src/tl/omp/common \
         $(END)
 
-src_tl_analysis_pcfg_libpcfg_la_CFLAGS   = $(PCFG_COMMON_FLAGS) \
+src_tl_analysis_pcfg_libpcfg_la_CFLAGS   = $(PCFG_COMMON_FLAGS)
+src_tl_analysis_pcfg_libpcfg_la_CXXFLAGS = $(PCFG_COMMON_FLAGS) \
                                            -I $(srcdir)/src/tl/analysis/aliasing
-src_tl_analysis_pcfg_libpcfg_la_CXXFLAGS = $(PCFG_COMMON_FLAGS)
 src_tl_analysis_pcfg_libpcfg_la_LDFLAGS  = $(tl_ldflags)
-src_tl_analysis_pcfg_libpcfg_la_LIBADD   = $(tl_libadd)\
+src_tl_analysis_pcfg_libpcfg_la_LIBADD   = $(tl_libadd) \
                                            src/tl/libtl.la \
                                            src/tl/omp/common/libtlomp-common.la \
                                            src/tl/analysis/common/libanalysis_utils.la \
+                                           src/tl/analysis/aliasing/libaliasing.la \
                                            $(END)
 
 src_tl_analysis_pcfg_libpcfg_la_SOURCES = \
@@ -1281,6 +1299,24 @@ src_tl_analysis_pcfg_libpcfg_la_SOURCES = \
                     src/tl/analysis/pcfg/tl-task-sync.cpp \
                     src/tl/analysis/pcfg/tl-dot-graph.cpp \
                     $(END)
+
+##########################################################################
+# src/tl/analysis/tasks
+##########################################################################
+
+lib_LTLIBRARIES += src/tl/analysis/tasks/libtasks_analysis.la
+
+src_tl_analysis_tasks_libtasks_analysis_la_CFLAGS   = $(tl_cflags)
+src_tl_analysis_tasks_libtasks_analysis_la_CXXFLAGS = $(tl_cflags) \
+                                                      $(ANALYSIS_CFLAGS)
+src_tl_analysis_tasks_libtasks_analysis_la_LDFLAGS  = $(tl_ldflags)
+src_tl_analysis_tasks_libtasks_analysis_la_LIBADD   = $(tl_libadd) \
+                                                      src/tl/libtl.la \
+                                                      $(ANALYSIS_LIBADD)
+
+src_tl_analysis_tasks_libtasks_analysis_la_SOURCES = src/tl/analysis/tasks/tl-task-concurrency.hpp \
+                                                     src/tl/analysis/tasks/tl-task-concurrency.cpp \
+                                                     $(END)
 
 ##########################################################################
 # src/tl/analysis/use_def
@@ -1317,10 +1353,13 @@ analysisdata_DATA = \
 lib_LTLIBRARIES += src/tl/analysis/liveness/libliveness.la
 
 src_tl_analysis_liveness_libliveness_la_CFLAGS = $(tl_cflags)
-src_tl_analysis_liveness_libliveness_la_CXXFLAGS = $(tl_cflags) $(ANALYSIS_CFLAGS)
+src_tl_analysis_liveness_libliveness_la_CXXFLAGS = $(tl_cflags) \
+                                                   -I $(srcdir)/src/tl/analysis/tasks \
+                                                   $(ANALYSIS_CFLAGS)
 src_tl_analysis_liveness_libliveness_la_LDFLAGS = $(tl_ldflags)
 src_tl_analysis_liveness_libliveness_la_LIBADD = $(tl_libadd) \
 						src/tl/libtl.la \
+						src/tl/analysis/tasks/libtasks_analysis.la \
 						$(ANALYSIS_LIBADD)
 
 src_tl_analysis_liveness_libliveness_la_SOURCES = src/tl/analysis/liveness/tl-liveness.hpp \
@@ -1361,29 +1400,6 @@ src_tl_analysis_loops_libloops_analysis_la_SOURCES = src/tl/analysis/loops/tl-iv
                                src/tl/analysis/loops/tl-iv-analysis.cpp \
                                src/tl/analysis/loops/tl-loop-analysis.hpp \
                                src/tl/analysis/loops/tl-loop-analysis.cpp \
-                               $(END)
-
-##########################################################################
-# src/tl/analysis/pcfg-tasks
-##########################################################################
-
-lib_LTLIBRARIES += src/tl/analysis/pcfg_tasks/libpcfg_tasks.la
-
-src_tl_analysis_pcfg_tasks_libpcfg_tasks_la_CFLAGS   = $(tl_cflags)
-src_tl_analysis_pcfg_tasks_libpcfg_tasks_la_CXXFLAGS = $(tl_cflags) \
-                                                       -I $(srcdir)/src/tl/analysis/aliasing \
-                                                       $(ANALYSIS_CFLAGS)
-src_tl_analysis_pcfg_tasks_libpcfg_tasks_la_LDFLAGS  = $(tl_ldflags)
-src_tl_analysis_pcfg_tasks_libpcfg_tasks_la_LIBADD   = $(tl_libadd) \
-                                                       src/tl/libtl.la \
-                                                       src/tl/analysis/aliasing/libaliasing.la \
-                                                       $(ANALYSIS_LIBADD)
-
-src_tl_analysis_pcfg_tasks_libpcfg_tasks_la_SOURCES = \
-			       src/tl/analysis/pcfg_tasks/tl-task-syncs-utils.hpp \
-			       src/tl/analysis/pcfg_tasks/tl-task-syncs-utils.cpp \
-                               src/tl/analysis/pcfg_tasks/tl-task-syncs-tune.hpp \
-                               src/tl/analysis/pcfg_tasks/tl-task-syncs-tune.cpp \
                                $(END)
 
 ##########################################################################
@@ -1444,6 +1460,14 @@ src_tl_analysis_tdg_libtdg_la_LIBADD = $(tl_libadd) \
 
 src_tl_analysis_tdg_libtdg_la_SOURCES = src/tl/analysis/tdg/tl-task-dependency-graph.hpp \
 					src/tl/analysis/tdg/tl-task-dependency-graph.cpp \
+					src/tl/analysis/tdg/tl-old-tdg.cpp \
+					src/tl/analysis/tdg/tl-flow-tdg.cpp \
+					src/tl/analysis/tdg/tl-tdg-utils.cpp \
+					src/tl/analysis/tdg/tl-expanded-tdg.cpp \
+ 					src/tl/analysis/tdg/tl-tdg-dot.cpp \
+					src/tl/analysis/tdg/tl-tdg-json.cpp \
+					src/tl/analysis/tdg/tl-tdg-components.cpp \
+					src/tl/analysis/tdg/tl-tdg-mapper.cpp \
 					$(END)
 
 ##########################################################################
@@ -1496,13 +1520,14 @@ src_tl_analysis_interface_libanalysis_interface_la_CXXFLAGS= $(tl_cflags) \
 				-I$(srcdir)/src/tl/ \
 				-I$(srcdir)/src/tl/optimizations \
 				-I$(srcdir)/src/tl/analysis/common \
+				-I$(srcdir)/src/tl/analysis/aliasing \
 				-I$(srcdir)/src/tl/analysis/pcfg \
 				-I$(srcdir)/src/tl/analysis/pointers \
 				-I$(srcdir)/src/tl/analysis/use_def \
 				-I$(srcdir)/src/tl/analysis/liveness \
 				-I$(srcdir)/src/tl/analysis/reach_defs \
 				-I$(srcdir)/src/tl/analysis/loops \
-				-I$(srcdir)/src/tl/analysis/pcfg_tasks \
+				-I$(srcdir)/src/tl/analysis/tasks \
 				-I$(srcdir)/src/tl/analysis/auto-scope \
 				-I$(srcdir)/src/tl/analysis/tdg \
 				-I$(srcdir)/src/tl/analysis/range \
@@ -1517,13 +1542,14 @@ src_tl_analysis_interface_libanalysis_interface_la_LIBADD= \
 				src/tl/libtl.la \
 				src/tl/optimizations/libtloptimizations.la \
 				src/tl/analysis/common/libanalysis_utils.la \
+				src/tl/analysis/aliasing/libaliasing.la \
 				src/tl/analysis/pcfg/libpcfg.la \
 				src/tl/analysis/pointers/libpointer_size.la \
 				src/tl/analysis/use_def/libuse_def.la \
 				src/tl/analysis/liveness/libliveness.la \
 				src/tl/analysis/reach_defs/libreaching_definitions.la \
 				src/tl/analysis/loops/libloops_analysis.la \
-				src/tl/analysis/pcfg_tasks/libpcfg_tasks.la \
+				src/tl/analysis/tasks/libtasks_analysis.la \
 				src/tl/analysis/auto-scope/libauto_scope.la \
 				src/tl/analysis/tdg/libtdg.la \
 				src/tl/analysis/range/librange.la \
@@ -1567,45 +1593,32 @@ endif		# BUILD_ANALYSIS
 ##########################################################################
 # src/tl/hlt
 ##########################################################################
-if BUILD_HLT
-
 lib_LTLIBRARIES += src/tl/hlt/libtl-hlt.la
-
-HLT_ANALYSIS_CFLAGS= \
-			  -I $(srcdir)/src/tl/analysis/common \
-			  -I $(srcdir)/src/tl/analysis/liveness \
-			  -I $(srcdir)/src/tl/analysis/loops \
-			  -I $(srcdir)/src/tl/analysis/pcfg \
-			  -I $(srcdir)/src/tl/analysis/reach_defs \
-			  -I $(srcdir)/src/tl/analysis/interface \
-			  -I $(srcdir)/src/tl/analysis/test_phase \
-			  -I $(srcdir)/src/tl/analysis/use_def \
-			  -I $(srcdir)/src/tl/analysis/tdg \
-			  $(END)
-
-HLT_ANALYSIS_LIBADD = # src/tl/analysis/interface/libanalysis_interface.la
 
 HLT_COMMON_CFLAGS=-DLIBHLT_DLL_EXPORT \
 			  -I $(srcdir)/src/tl/omp/core \
 			  -I $(srcdir)/src/tl/omp/common \
-			  $(HLT_ANALYSIS_CFLAGS) \
 			  $(END)
 
 src_tl_hlt_libtl_hlt_la_CFLAGS=$(tl_cflags) $(HLT_COMMON_CFLAGS)
 src_tl_hlt_libtl_hlt_la_CXXFLAGS=$(tl_cxxflags) $(HLT_COMMON_CFLAGS)
 src_tl_hlt_libtl_hlt_la_LDFLAGS=$(tl_ldflags)
-src_tl_hlt_libtl_hlt_la_LIBADD=$(tl_libadd) $(HLT_ANALYSIS_LIBADD) \
+src_tl_hlt_libtl_hlt_la_LIBADD=$(tl_libadd) \
 		$(top_builddir)/src/tl/omp/common/libtlomp-common.la \
 		$(END)
 
 src_tl_hlt_libtl_hlt_la_SOURCES = \
-	  src/tl/hlt/hlt-common.hpp \
+      src/tl/hlt/hlt-common.hpp \
+      src/tl/hlt/hlt-utils.hpp \
+      src/tl/hlt/hlt-utils.cpp \
       src/tl/hlt/hlt-transform.hpp \
       src/tl/hlt/hlt-transform.cpp \
       src/tl/hlt/hlt-loop-normalize.hpp \
       src/tl/hlt/hlt-loop-normalize.cpp \
       src/tl/hlt/hlt-loop-unroll.hpp \
       src/tl/hlt/hlt-loop-unroll.cpp \
+      src/tl/hlt/hlt-loop-collapse.hpp \
+      src/tl/hlt/hlt-loop-collapse.cpp \
       $(END)
 
 phases_LTLIBRARIES += src/tl/hlt/libtl-hlt-pragma.la
@@ -1619,8 +1632,6 @@ src_tl_hlt_libtl_hlt_pragma_la_SOURCES = \
       src/tl/hlt/hlt-pragma.cpp \
       src/tl/hlt/hlt-pragma.hpp \
       $(END)
-
-endif
 
 # ##########################################################################
 # # src/tl/vectorization/common
@@ -1768,7 +1779,8 @@ src_tl_omp_core_libtlomp_core_la_LIBADD = $(phases_libadd) \
 		$(top_builddir)/src/tl/omp/common/libtlomp-common.la \
 		$(END)
 
-EXTRA_DIST += src/tl/omp/core/tl-omp-constructs.def
+EXTRA_DIST += src/tl/omp/core/tl-omp-constructs.def \
+	      src/tl/omp/core/tl-oss-constructs.def
 
 src_tl_omp_core_libtlomp_core_la_SOURCES = \
    src/tl/omp/core/tl-omp-core.hpp \
@@ -1778,9 +1790,6 @@ src_tl_omp_core_libtlomp_core_la_SOURCES = \
    src/tl/omp/core/tl-omp-deps.hpp \
    src/tl/omp/core/tl-omp-deps.cpp \
    src/tl/omp/core/tl-omp-core-devices.cpp \
-   src/tl/omp/core/tl-omp-tasks.hpp \
-   src/tl/omp/core/tl-omp-tasks.cpp \
-   src/tl/omp/core/tl-omp-collapse.cpp \
    src/tl/omp/core/tl-omp-reduction.hpp \
    src/tl/omp/core/tl-omp-reduction.cpp \
    src/tl/omp/core/tl-omp-reduction-builtin.cpp \
@@ -1803,6 +1812,7 @@ src_tl_omp_base_libtlomp_base_la_CFLAGS = $(phases_cflags) \
 src_tl_omp_base_libtlomp_base_la_CXXFLAGS = $(phases_cxxflags) \
                          -I $(srcdir)/src/tl/omp/common \
                          -I $(srcdir)/src/tl/omp/core \
+                         -I $(srcdir)/src/tl/hlt \
                          -I $(srcdir)/src/tl/vectorization/common \
                          -I $(srcdir)/src/tl/vectorization/vectorizer \
                          -I $(srcdir)/src/tl/analysis/interface\
@@ -1813,6 +1823,7 @@ src_tl_omp_base_libtlomp_base_la_CXXFLAGS = $(phases_cxxflags) \
 
 src_tl_omp_base_libtlomp_base_la_LDFLAGS = $(phases_ldflags)
 src_tl_omp_base_libtlomp_base_la_LIBADD = $(phases_libadd) \
+			    $(top_builddir)/src/tl/hlt/libtl-hlt.la \
                             $(top_builddir)/src/tl/omp/core/libtlomp-core.la \
                             $(END)
 
@@ -1829,6 +1840,7 @@ src_tl_omp_base_libtlomp_base_la_SOURCES = \
    src/tl/omp/base/tl-omp-base-utils.cpp \
    src/tl/omp/base/tl-omp-base.hpp \
    src/tl/omp/base/tl-omp-base.cpp \
+   src/tl/omp/base/tl-omp-base-hlt.cpp \
    src/tl/omp/base/tl-omp-base-devices.cpp \
    src/tl/omp/base/tl-ompss-base-task.hpp \
    src/tl/omp/base/tl-ompss-base-task.cpp \
@@ -2304,7 +2316,7 @@ src_tl_omp_lint_libtlomp_lint_la_CXXFLAGS = $(phases_cxxflags) \
                           -I $(top_srcdir)/src/tl/omp/common \
                           -I $(top_srcdir)/src/tl/analysis/pcfg \
                           -I $(top_srcdir)/src/tl/analysis/common \
-                          -I $(top_srcdir)/src/tl/analysis/pcfg_tasks \
+                          -I $(top_srcdir)/src/tl/analysis/tasks \
                           -I $(top_srcdir)/src/tl/analysis/tdg \
                           -I $(top_srcdir)/src/tl/analysis/interface\
                           $(END)
@@ -2313,7 +2325,7 @@ src_tl_omp_lint_libtlomp_lint_la_LDFLAGS = $(phases_ldflags)
 src_tl_omp_lint_libtlomp_lint_la_LIBADD = $(phases_libadd) \
 			  $(top_builddir)/src/tl/omp/common/libtlomp-common.la \
 			  $(top_builddir)/src/tl/analysis/pcfg/libpcfg.la \
-			  $(top_builddir)/src/tl/analysis/pcfg_tasks/libpcfg_tasks.la \
+			  $(top_builddir)/src/tl/analysis/tasks/libtasks_analysis.la \
 			  $(top_builddir)/src/tl/analysis/tdg/libtdg.la \
 			  $(top_builddir)/src/tl/analysis/interface/libanalysis_interface.la \
               $(END)
@@ -2334,9 +2346,11 @@ if BUILD_NANOS6
 phases_LTLIBRARIES += src/tl/ompss/nanos6/libtlnanos6-lowering.la
 
 src_tl_ompss_nanos6_libtlnanos6_lowering_la_CFLAGS = $(phases_cflags) \
+                                                        -I $(top_srcdir)/src/tl/omp/core \
                                                         -I $(top_srcdir)/src/tl/omp/common \
                                                         -I@NANOS6_INCLUDES@
 src_tl_ompss_nanos6_libtlnanos6_lowering_la_CXXFLAGS = $(phases_cxxflags) \
+                                                        -I $(top_srcdir)/src/tl/omp/core \
                                                         -I $(top_srcdir)/src/tl/omp/common \
                                                         -I@NANOS6_INCLUDES@
 
@@ -2351,6 +2365,7 @@ src_tl_ompss_nanos6_libtlnanos6_lowering_la_SOURCES = \
 								 src/tl/ompss/nanos6/tl-nanos6-lower.hpp \
 								 src/tl/ompss/nanos6/tl-nanos6-task.cpp \
 								 src/tl/ompss/nanos6/tl-nanos6-taskcall.cpp \
+								 src/tl/ompss/nanos6/tl-nanos6-taskloop.cpp \
 								 src/tl/ompss/nanos6/tl-nanos6-task-properties.hpp \
 								 src/tl/ompss/nanos6/tl-nanos6-task-properties.cpp \
 								 src/tl/ompss/nanos6/tl-nanos6-support.hpp \
@@ -2360,7 +2375,10 @@ src_tl_ompss_nanos6_libtlnanos6_lowering_la_SOURCES = \
 								 src/tl/ompss/nanos6/tl-nanos6-fortran-support.cpp \
 								 src/tl/ompss/nanos6/tl-nanos6-taskwait.cpp \
 								 src/tl/ompss/nanos6/tl-nanos6-critical.cpp \
+								 src/tl/ompss/nanos6/tl-nanos6-atomic.cpp \
 								 src/tl/ompss/nanos6/tl-nanos6-unsupported.cpp \
+								 src/tl/ompss/nanos6/tl-nanos6-interface.hpp \
+								 src/tl/ompss/nanos6/tl-nanos6-interface.cpp \
 								 $(END)
 
 endif
@@ -2828,6 +2846,8 @@ src_mcxx_tl_libmcxxtl_la_SOURCES = \
 	src/mcxx_tl/cxx-compilerphases.cpp
 
 MCXX_TL_COMMON_CFLAGS= -DLIBMCXXTL_DLL_EXPORT \
+    -I $(top_srcdir)/support/gperf \
+    -I $(top_builddir)/support/gperf \
     -I $(top_srcdir)/src/frontend \
     -I $(top_srcdir)/src/frontend/fortran \
     -I $(top_srcdir)/src/driver \
@@ -2894,8 +2914,11 @@ src_driver_plaincxx_CFLAGS= \
 			-DPKGDATADIR=\"$(pkgdatadir)\" \
 			-Wall
 
-src_driver_plaincxx_CFLAGS += -I$(top_srcdir)/src/frontend/fortran \
-                              -I$(top_builddir)/src/frontend/fortran \
+src_driver_plaincxx_CFLAGS += \
+			      -I$(top_srcdir)/support/gperf \
+			      -I$(top_builddir)/support/gperf \
+			      -I$(top_srcdir)/src/frontend/fortran \
+			      -I$(top_builddir)/src/frontend/fortran \
                               -I$(top_srcdir)/src/driver \
                               -I$(top_srcdir)/src/driver/fortran \
                               -I$(top_builddir)/src/driver \
@@ -3049,7 +3072,7 @@ else
 	@exit 1
 endif
 
-src/driver/cxx-target-tools.h :
+src/driver/cxx-target-tools.h : Makefile
 	$(AM_V_GEN)( \
 		OUT_FILE=src/driver/cxx-target-tools.h; \
 		echo "#ifndef CXX_TARGET_TOOLS_H" > $${OUT_FILE} ; \
@@ -3057,6 +3080,7 @@ src/driver/cxx-target-tools.h :
 		echo "" >> $${OUT_FILE} ; \
 		echo "#define TARGET_OBJDUMP \""$$(echo objdump | $(SED) '$(program_transform_name)')\" >> $${OUT_FILE} ; \
 		echo "#define TARGET_OBJCOPY \""$$(echo objcopy | $(SED) '$(program_transform_name)')\" >> $${OUT_FILE} ; \
+		echo "#define TARGET_LD \""$$(echo ld | $(SED) '$(program_transform_name)')\" >> $${OUT_FILE} ; \
 		echo "#define TARGET_AR \""$$(echo ar | $(SED) '$(program_transform_name)')\" >> $${OUT_FILE} ; \
 		echo "#define TARGET_MF03_PRESCANNER \""$$(echo mf03-prescanner | $(SED) '$(program_transform_name)')\" >> $${OUT_FILE} ; \
 		echo "" >> $${OUT_FILE} ; \
@@ -3084,6 +3108,8 @@ driver-uninstall-local:
 
 src_driver_mcxx_embedder_CFLAGS= \
 			-std=gnu99 \
+			-I$(top_srcdir)/support/gperf \
+			-I$(top_builddir)/support/gperf \
 			-I$(top_srcdir)/lib \
 			-I$(top_srcdir)/src/driver \
 			-I$(top_srcdir)/src/driver/fortran \
@@ -3125,6 +3151,8 @@ noinst_LTLIBRARIES += src/driver/fortran/libmf03-driver.la
 fortran_driver_common_cflags= \
 			-std=gnu99 \
 			-fexceptions \
+			-I$(top_srcdir)/support/gperf \
+			-I$(top_builddir)/support/gperf \
 			-I$(top_srcdir)/lib \
 			-I$(top_srcdir)/src/frontend \
 			-I$(top_srcdir)/src/frontend/fortran \
@@ -3164,10 +3192,6 @@ src_driver_fortran_libmf03_driver_la_CFLAGS = $(fortran_driver_common_cflags)
 # config
 ##########################################################################
 
-CONFIG_MCXX=\
-            config/config.mcxx \
-            $(END)
-
 # We need a dist hook to keep these files in sync with their template.*
 # see below
 CONFIG_FILES =  \
@@ -3200,6 +3224,7 @@ INSTALL_CONFIG_FILES = $(addprefix config/, @INSTALL_CONFIG_FILES@)
 # that we know are deprecated and should not be
 # in the user installation anymore
 REMOVE_CONFIG_FILES=\
+					10.config.analysis-base \
 					50.config.gpu \
 					50.config.cuda \
 					50.config.omp.ocl \
@@ -3212,21 +3237,17 @@ REMOVE_CONFIG_FILES=\
 
 config-files-dist-hook:
 	$(MKDIR_P) $(distdir)/config
-	for i in $(notdir $(CONFIG_FILES)) $(notdir $(CONFIG_MCXX)); \
+	for i in $(notdir $(CONFIG_FILES)); \
     do \
        cp -v "$(srcdir)/config/template.$${i}" "$(distdir)/config" || exit $?; \
     done
 
 
-CLEANFILES += $(CONFIG_FILES) $(CONFIG_MCXX)
+CLEANFILES += $(CONFIG_FILES)
 
 # Replacements are defined in this file
 config_edit = \
      $(SED) \
-     -e 's|@ACOLIB_INCLUDES[@]|$(ACOLIB_INCLUDES)|g' \
-     -e 's|@ACOLIB_LIBS[@]|$(ACOLIB_LIBS)|g' \
-     -e 's|@ACOTES_MSF_INCLUDES[@]|$(ACOTES_MSF_INCLUDES)|g' \
-     -e 's|@ACOTES_MSF_LIBS[@]|$(ACOTES_MSF_LIBS)|g' \
      -e 's|@NANOX_INCLUDES[@]|$(NANOX_INCLUDES)|g' \
      -e 's|@NANOX_LIBS[@]|$(NANOX_LIBS)|g' \
      -e 's|@NANOX_NEW_LINK[@]|$(NANOX_NEW_LINK)|g' \
@@ -3237,27 +3258,18 @@ config_edit = \
      -e 's|@NANOX_MIC_INCLUDES[@]|$(NANOX_MIC_INCLUDES)|g' \
      -e 's|@NANOX_MIC_LIBS[@]|$(NANOX_MIC_LIBS)|g' \
      -e 's|@NANOX_MIC[@]|$(NANOX_MIC)|g' \
-     -e 's|@NANOS4_INCLUDES[@]|$(NANOS4_INCLUDES)|g' \
-     -e 's|@NANOS4_LIBS[@]|$(NANOS4_LIBS)|g' \
-     -e 's|@NEBELUNG_INCLUDES[@]|$(NEBELUNG_INCLUDES)|g' \
-     -e 's|@NEBELUNG_LIBS[@]|$(NEBELUNG_LIBS)|g' \
-     -e "s|@SUPERSCALAR_INCLUDES[@]|$(SUPERSCALAR_INCLUDES)|g" \
-     -e "s|@SUPERSCALAR_LIBS[@]|$(SUPERSCALAR_LIBS)|g" \
      -e "s|@CUDA_INCLUDES[@]|$(CUDA_INCLUDES)|g" \
      -e "s|@CUDA_LIBS[@]|$(CUDA_LIBS)|g" \
      -e "s|@CUDA_RPATH[@]|$(CUDA_RPATH)|g" \
      -e 's|@ENABLE_CUDA[@]|$(ENABLE_CUDA)|g' \
      -e 's|@ENABLE_OPENCL[@]|$(ENABLE_OPENCL)|g' \
-     -e 's|@ENABLE_MPI[@]|$(ENABLE_MPI)|g' \
      -e 's|@MPIFORT[@]|$(MPIFORT)|g' \
      -e 's|@MPICXX[@]|$(MPICXX)|g' \
      -e 's|@MPICC[@]|$(MPICC)|g' \
-     -e 's|@MPIMODULE[@]|$(MPIMODULE)|g' \
      -e "s|@abs_top_srcdir[@]|$(abs_top_srcdir)|g" \
      -e 's|@prefix[@]|$(prefix)|g' \
      -e 's|@includedir[@]|$(includedir)|g' \
      -e 's|@libdir[@]|$(libdir)|g' \
-     -e 's|@superscalar_version[@]|$(superscalar_version)|g' \
      -e 's|@RPATH_PARAMETER[@]|$(RPATH_PARAMETER)|g' \
      -e 's|@ICC[@]|$(ICC)|g' \
      -e 's|@ICPC[@]|$(ICPC)|g' \
@@ -3272,8 +3284,6 @@ config_edit = \
      -e 's|@MPICC[@]|$(MPICC)|g' \
      -e 's|@MPICXX[@]|$(MPICXX)|g' \
      -e 's|@MIC_LIBS[@]|$(MIC_LIBS)|g' \
-     -e 's|@ENABLEMPI_ICC[@]|$(ENABLEMPI_ICC)|g' \
-     -e 's|@ENABLEMPI_GCC[@]|$(ENABLEMPI_GCC)|g' \
      -e 's|@INTEL_OMP_LIB[@]|$(INTEL_OMP_LIB)|g' \
      -e 's|@INTEL_OMP_INCLUDE[@]|$(INTEL_OMP_INCLUDE)|g' \
      -e 's|@MIC_TOOLS[@]|$(MIC_TOOLS)|g' \
@@ -3298,16 +3308,16 @@ config_edit += $(foreach profile, $(profiles), \
     )
 
 # gcc, g++ and gfortran
-config_edit += -e 's|@GCC[@]|'`echo gcc | $(SED) '$(program_transform_name)'`'|g' \
-	-e 's|@G++[@]|'`echo g++ | $(SED) '$(program_transform_name)'`'|g' \
-	-e 's|@GFORTRAN[@]|'`echo gfortran | $(SED) '$(program_transform_name)'`'|g'
+config_edit += -e 's|@GCC[@]|'`echo $(GCC) | $(SED) '$(program_transform_name)'`'|g' \
+	-e 's|@G++[@]|'`echo $(GXX) | $(SED) '$(program_transform_name)'`'|g' \
+	-e 's|@GFORTRAN[@]|'`echo $(GFORTRAN) | $(SED) '$(program_transform_name)'`'|g'
 
 # target_options[profile]
 config_edit += $(foreach profile, $(profiles), \
   -e 's|^\( *\)*target_options\[\( *\)$(profile)\( *\)\]\( .*\)=|\1target_options[\2'`echo '$(profile)' | $(SED) '$(program_transform_name)'`'\3]\4=|g' \
    )
 
-BUILT_SOURCES += $(CONFIG_MCXX) $(INSTALL_CONFIG_FILES) $(INSTALL_SCRIPT_COMPILER_NAMES)
+BUILT_SOURCES += $(INSTALL_CONFIG_FILES) $(INSTALL_SCRIPT_COMPILER_NAMES)
 
 # Generates configs
 config/% : config/template.$(notdir %) Makefile
@@ -3345,11 +3355,6 @@ remove-old-profiles:
 	done
 
 install-data-hook: config-install-data-hook script-driver-install-data-hook
-
-# Where and what to install
-pkgdata_DATA = \
-		config/config.mcxx \
-		$(END)
 
 configdir = $(pkgdatadir)/config.d
 config_DATA = \
@@ -3580,6 +3585,34 @@ endif
 PLAINFC_PROFILE=`echo plainfc | $(SED) '$(program_transform_name)'`
 
 PLAINFC=$(top_builddir)/src/driver/plaincxx --config-dir=$(top_builddir)/config --profile=$(PLAINFC_PROFILE) --do-not-warn-config --do-not-wrap-modules
+
+##########################################################################
+# support/gperf
+##########################################################################
+
+if GPERF_BUILDING
+BUILT_SOURCES += support/gperf/gperf-compat-types.h
+CLEANFILES += support/gperf/gperf-compat-types.h
+endif
+
+EXTRA_DIST += support/gperf/gperf-compat-types.h
+
+if GPERF_BUILDING
+GPERF_LEN_TYPE=@GPERF_LENGTH_TYPE@
+support/gperf/gperf-compat-types.h: Makefile
+	$(AM_V_GEN)( \
+    OUT_FILE="support/gperf/gperf-compat-types.h"; \
+	echo "/* This file has been generated */" > $${OUT_FILE}; \
+	echo >> $${OUT_FILE}; \
+	echo "#ifndef GPERF_COMPAT_TYPES_H" >> $${OUT_FILE}; \
+	echo "#define GPERF_COMPAT_TYPES_H" >> $${OUT_FILE}; \
+	echo >> $${OUT_FILE}; \
+	echo "#include<stddef.h>" >> $${OUT_FILE}; \
+	echo "typedef" $(GPERF_LEN_TYPE) "gperf_length_t;" >> $${OUT_FILE}; \
+	echo >> $${OUT_FILE}; \
+	echo "#endif /* GPERF_COMPAT_TYPES_H */" >> $${OUT_FILE}; \
+    )
+endif
 
 ##########################################################################
 # support/iso_fortran

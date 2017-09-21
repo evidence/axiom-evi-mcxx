@@ -121,7 +121,7 @@ namespace TL { namespace OpenMP {
                                     "skipping useless dependence %s(%s) since it only names a parameter."
                                     "The value of a parameter is never copied out of a function "
                                     "so it cannot generate an output dependence\n",
-                                    get_dependency_direction_name(_direction).c_str(),
+                                    dependency_direction_to_str(_direction).c_str(),
                                     expr.prettyprint().c_str());
                             return true;
                         }
@@ -131,7 +131,7 @@ namespace TL { namespace OpenMP {
                                     expr.get_locus(),
                                     "skipping useless dependence %s(%s) since it only names a parameter."
                                     "The value of a parameter is always copied in and will never define such dependence\n",
-                                    get_dependency_direction_name(_direction).c_str(),
+                                    dependency_direction_to_str(_direction).c_str(),
                                     expr.prettyprint().c_str());
                             return true;
                         }
@@ -280,11 +280,10 @@ namespace TL { namespace OpenMP {
 
                 if (!expr.is_valid())
                 {
-                    std::string dep_str = get_dependency_direction_name(_direction);
                     warn_printf_at(
                             nodecl.get_locus(),
                             "invalid dependency expression '%s(%s)', skipping\n",
-                            dep_str.c_str(),
+                            dependency_direction_to_str(_direction).c_str(),
                             expr.prettyprint().c_str());
                 }
 
@@ -674,6 +673,8 @@ namespace TL { namespace OpenMP {
 
         task_info.set_untied(is_untied_task);
 
+        task_info.set_wait(pragma_line.get_clause("wait").is_defined());
+
         PragmaCustomClause label_clause = pragma_line.get_clause("label");
         if (label_clause.is_defined())
         {
@@ -816,6 +817,38 @@ namespace TL { namespace OpenMP {
         // Recall that std::stack does not have a clear operation so we assign
         // to it a new std::stack
         _target_context = std::stack<TL::OmpSs::TargetContext>();
+    }
+
+    void Core::oss_release_handler_pre(TL::PragmaCustomDirective construct)
+    {
+        TL::PragmaCustomLine pragma_line = construct.get_pragma_line();
+
+        DataEnvironment& data_environment =
+            _openmp_info->get_new_data_environment(construct);
+        _openmp_info->push_current_data_environment(data_environment);
+
+        bool there_is_default_clause = false;
+        DataSharingAttribute default_data_attr = get_default_data_sharing(pragma_line,
+                /* fallback */ DS_UNDEFINED,
+                there_is_default_clause,
+                /*allow_default_auto*/ true);
+
+        ObjectList<Symbol> extra_symbols;
+
+        handle_task_dependences(
+                pragma_line, /* parsing_scope */ pragma_line,
+                default_data_attr, data_environment, extra_symbols);
+
+        handle_implicit_dependences_of_task_reductions(
+                pragma_line, default_data_attr,
+                data_environment, extra_symbols);
+
+        get_data_extra_symbols(data_environment, extra_symbols);
+    }
+
+    void Core::oss_release_handler_post(TL::PragmaCustomDirective construct)
+    {
+        _openmp_info->pop_current_data_environment();
     }
 
 } }

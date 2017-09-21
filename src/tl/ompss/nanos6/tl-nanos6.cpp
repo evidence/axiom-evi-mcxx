@@ -26,21 +26,33 @@
 
 
 #include "tl-nanos6.hpp"
+#include "tl-nanos6-interface.hpp"
 #include "tl-nanos6-lower.hpp"
+
 #include "tl-compilerpipeline.hpp"
+#include "tl-final-stmts-generator.hpp"
+
 #include "codegen-phase.hpp"
+
 #include "cxx-profile.h"
 #include "cxx-driver-utils.h"
+#include "cxx-cexpr.h"
 
 #include <errno.h>
 
 namespace TL { namespace Nanos6 {
 
     LoweringPhase::LoweringPhase()
+        : _final_clause_transformation_disabled(false)
     {
         set_phase_name("Nanos 6 lowering");
         set_phase_description("This phase lowers from Mercurium parallel IR "
                 "into real code involving the Nanos 6 runtime interface");
+
+        register_parameter("disable_final_clause_transformation",
+                "Disables the OpenMP/OmpSs transformation of the 'final' clause",
+                _final_clause_transformation_str,
+                "0").connect(std::bind(&LoweringPhase::set_disable_final_clause_transformation, this, std::placeholders::_1));
 
         // std::cerr << "Initializing Nanos 6 lowering phase" << std::endl;
     }
@@ -54,13 +66,30 @@ namespace TL { namespace Nanos6 {
 
         FORTRAN_LANGUAGE()
         {
-            this->fortran_load_api(dto);
+            fortran_preprocess_api(dto);
+        }
+
+        Interface::check_nanos6_deprecated_headers();
+
+        // This function depends on the Nanos6 headers
+        compute_impl_constants();
+
+        FORTRAN_LANGUAGE()
+        {
+            // This function depends on the implementation constants
+            fortran_fixup_api();
         }
 
         Nodecl::NodeclBase translation_unit =
             *std::static_pointer_cast<Nodecl::NodeclBase>(dto["nodecl"]);
 
-        Lower lower(this);
+
+        FinalStmtsGenerator final_generator(/* ompss_mode */ true);
+        // If the final clause transformation is disabled we shouldn't generate the final stmts
+        if (!_final_clause_transformation_disabled)
+            final_generator.walk(translation_unit);
+
+        Lower lower(this, final_generator.get_final_stmts());
         lower.walk(translation_unit);
     }
 
@@ -111,6 +140,31 @@ namespace TL { namespace Nanos6 {
 
         // Do not forget to clear the node for next files
         _extra_c_code = Nodecl::List();
+    }
+
+    void LoweringPhase::set_disable_final_clause_transformation(const std::string& str)
+    {
+        parse_boolean_option("disable_final_clause_transformation", str, _final_clause_transformation_disabled, "Assuming false.");
+    }
+
+    unsigned int LoweringPhase::nanos6_api_max_dimensions() const
+    {
+        return _constants.api_max_dimensions;
+    }
+
+    void LoweringPhase::compute_impl_constants()
+    {
+        // Computing api_max_dimensions: this information is obtained from an enumerator
+        // defined inside an enum that is defined in the global scope
+        TL::Symbol max_dimensions_sym =
+            TL::Scope::get_global_scope().get_symbol_from_name("__nanos6_max_dimensions");
+        ERROR_CONDITION(max_dimensions_sym.is_invalid(), "'__nanos6_max_dimensions' symbol not found", 0);
+
+        Nodecl::NodeclBase value = max_dimensions_sym.get_value();
+        ERROR_CONDITION(value.is_null(), "'__nanos6_max_dimensions' does not have a value", 0);
+        ERROR_CONDITION(!value.is_constant(), "'__nanos6_max_dimensions' should have a costant value", 0);
+
+        _constants.api_max_dimensions = const_value_cast_to_unsigned_int(value.get_constant());
     }
 
 } }

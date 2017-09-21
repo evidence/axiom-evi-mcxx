@@ -369,8 +369,10 @@ namespace TL { namespace Nanos6 {
             return res;
         }
     }
+    namespace
+    {
 
-    void Lower::capture_argument_for_task_call(
+    void capture_argument_for_task_call(
         TL::Symbol called_sym,
         TL::Scope new_block_context_sc,
         TL::Type parameter_type,
@@ -442,6 +444,7 @@ namespace TL { namespace Nanos6 {
 
         argument_captures_syms.append(new_symbol);
     }
+    }
 
     void Lower::visit_task_call_c(const Nodecl::OmpSs::TaskCall& construct)
     {
@@ -467,8 +470,6 @@ namespace TL { namespace Nanos6 {
 
         Scope sc = construct.retrieve_context();
         Scope new_block_context_sc = new_block_context(sc.get_decl_context());
-
-        TaskProperties parameter_task_properties = TaskProperties::gather_task_properties(_phase, construct);
 
         Nodecl::List arguments = function_call.get_arguments().as<Nodecl::List>();
 
@@ -549,7 +550,7 @@ namespace TL { namespace Nanos6 {
             = rewrite_task_call_environment(
                 called_sym, parameters_environment, argument_captures_syms);
 
-        Nodecl::NodeclBase new_task_construct =
+        Nodecl::OpenMP::Task new_task_construct =
             Nodecl::OpenMP::Task::make(
                     new_omp_exec_environment,
                     new_task_body,
@@ -559,7 +560,7 @@ namespace TL { namespace Nanos6 {
         new_statements.append(argument_captures);
         new_statements.append(new_task_construct);
 
-        Nodecl::NodeclBase new_compound_stmt =
+        Nodecl::NodeclBase task_compound_stmt =
             Nodecl::Context::make(
                     Nodecl::List::make(
                         Nodecl::CompoundStatement::make(
@@ -575,10 +576,19 @@ namespace TL { namespace Nanos6 {
         Nodecl::NodeclBase parent = construct.get_parent();
         ERROR_CONDITION(!parent.is<Nodecl::ExpressionStatement>(),
                 "Invalid parent", 0);
-        parent.replace(new_compound_stmt);
 
-        // Now follow the usual path
-        this->walk(parent);
+        parent.replace(task_compound_stmt);
+
+        Nodecl::NodeclBase serial_stmts;
+        // If disabled, act normally
+        if (!_phase->_final_clause_transformation_disabled)
+        {
+            std::map<Nodecl::NodeclBase, Nodecl::NodeclBase>::iterator it = _final_stmts_map.find(construct);
+            ERROR_CONDITION(it == _final_stmts_map.end(), "Invalid serial statemtents", 0);
+            serial_stmts = Nodecl::List::make(Nodecl::ExpressionStatement::make(it->second));
+        }
+
+        lower_task(new_task_construct, serial_stmts);
     }
 
     void Lower::visit_task_call_fortran(const Nodecl::OmpSs::TaskCall& construct)
@@ -642,13 +652,13 @@ namespace TL { namespace Nanos6 {
 
         Nodecl::Utils::SimpleSymbolMap parameter_symbol_map;
 
-        TL::Symbol current_function = construct.retrieve_context().get_related_symbol();
         TL::Scope scope_inside_new_function = empty_stmt.retrieve_context();
 
         Nodecl::Utils::Fortran::ExtraDeclsVisitor fun_visitor(
                 parameter_symbol_map,
                 scope_inside_new_function,
-                current_function);
+                enclosing_function);
+
         fun_visitor.insert_extra_symbols(function_call);
         // Map the called symbol (if needed)
         // We do it early because we do not want to map the parameters
@@ -724,7 +734,7 @@ namespace TL { namespace Nanos6 {
                                       scope_inside_new_function);
 
         Nodecl::Utils::Fortran::append_used_modules(
-            current_function.get_related_scope(),
+            enclosing_function.get_related_scope(),
             adapter_function.get_related_scope());
 
         Nodecl::Utils::Fortran::append_used_modules(
@@ -733,12 +743,12 @@ namespace TL { namespace Nanos6 {
 
         // If the current function is in a module, make this new function a
         // sibling of it
-        if (current_function.is_in_module()
-            && current_function.is_module_procedure())
+        if (enclosing_function.is_in_module()
+            && enclosing_function.is_module_procedure())
         {
             symbol_entity_specs_set_in_module(
                 adapter_function.get_internal_symbol(),
-                current_function.in_module().get_internal_symbol());
+                enclosing_function.in_module().get_internal_symbol());
             symbol_entity_specs_set_access(
                 adapter_function.get_internal_symbol(), AS_PRIVATE);
             symbol_entity_specs_set_is_module_procedure(
@@ -788,17 +798,6 @@ namespace TL { namespace Nanos6 {
             empty_stmt.prepend_sibling(Nodecl::ObjectInit::make(*it));
         }
 
-        Nodecl::NodeclBase new_task_construct =
-            Nodecl::OpenMP::Task::make(
-                    new_omp_exec_environment,
-                    new_task_body,
-                    construct.get_locus());
-        empty_stmt.replace(new_task_construct);
-
-        // Now follow the usual path
-        this->walk(empty_stmt);
-
-        // Replace the call site
         construct.replace(
                     Nodecl::FunctionCall::make(
                         adapter_function.make_nodecl(/* set_ref */ true),
@@ -807,6 +806,39 @@ namespace TL { namespace Nanos6 {
                         /* function-form */ Nodecl::NodeclBase::null(),
                         called_sym.get_type().returns(),
                         construct.get_locus()));
+
+        Nodecl::NodeclBase new_task_construct =
+            Nodecl::OpenMP::Task::make(
+                    new_omp_exec_environment,
+                    new_task_body,
+                    construct.get_locus());
+        empty_stmt.replace(new_task_construct);
+
+        Nodecl::NodeclBase serial_stmts;
+        // If disabled, act normally
+        if (!_phase->_final_clause_transformation_disabled)
+        {
+            std::map<Nodecl::NodeclBase, Nodecl::NodeclBase>::iterator it = _final_stmts_map.find(construct);
+            ERROR_CONDITION(it == _final_stmts_map.end(), "Invalid serial statemtents", 0);
+            Nodecl::NodeclBase serial_function_call = it->second;
+            ERROR_CONDITION(!serial_function_call.is<Nodecl::FunctionCall>(), "Unexpected code", 0);
+
+            serial_function_call.as<Nodecl::FunctionCall>().set_arguments(Nodecl::List::make(new_arguments));
+
+            Nodecl::Utils::SimpleSymbolMap serial_stmt_map;
+            Nodecl::Utils::Fortran::ExtraDeclsVisitor fun_visitor_aux(
+                    serial_stmt_map,
+                    scope_inside_new_function,
+                    enclosing_function);
+
+            fun_visitor_aux.insert_extra_symbols(serial_function_call);
+
+            serial_stmts = Nodecl::List::make(
+                    Nodecl::ExpressionStatement::make(
+                        Nodecl::Utils::deep_copy(serial_function_call, scope_inside_new_function, serial_stmt_map)));
+        }
+
+        lower_task(empty_stmt.as<Nodecl::OpenMP::Task>(), serial_stmts);
     }
 
     void Lower::visit_task_call(const Nodecl::OmpSs::TaskCall& construct)

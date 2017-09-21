@@ -62,58 +62,55 @@ namespace TL
                 bool _simd_enabled;
                 void set_simd(const std::string &simd_enabled_str);
 
-                std::string _ompss_mode_str;
-                bool _ompss_mode;
-                void set_ompss_mode(const std::string &str);
-                bool in_ompss_mode() const;
-
                 std::ofstream* _omp_report_file;
                 std::string _omp_report_str;
                 bool _omp_report;
                 void set_omp_report_parameter(const std::string &str);
 
-                std::string _copy_deps_str;
-                bool _copy_deps_by_default;
-                void set_copy_deps_by_default(const std::string& str);
-                bool copy_deps_by_default() const;
-
-                std::string _untied_tasks_by_default_str;
-                bool _untied_tasks_by_default;
-                void set_untied_tasks_by_default(const std::string& str);
-                bool untied_tasks_by_default() const;
-
-                std::string _allow_shared_without_copies_str;
-                void set_allow_shared_without_copies(const std::string &allow_shared_without_copies_str);
-
-                std::string _discard_unused_data_sharings_str;
-                void set_discard_unused_data_sharings(const std::string &discard_unused_data_sharings);
-
-                std::string _allow_array_reductions_str;
-                void set_allow_array_reductions(const std::string& allow_array_reductions);
-
                 std::string _disable_task_expr_optim_str;
 
+                // Strings used to store the TL::Core phase flags
+                std::string _ompss_mode_str;
+                std::string _copy_deps_str;
+                std::string _untied_tasks_by_default_str;
+                std::string _allow_shared_without_copies_str;
                 std::string _enable_input_by_value_dependences;
-                void set_enable_input_by_value_dependences(const std::string &enable_input_by_value);
-
                 std::string _enable_nonvoid_function_tasks;
-                void set_enable_nonvoid_function_tasks(const std::string &enable_nonvoid_function_tasks);
+                std::string _allow_array_reductions_str;
+                std::string _discard_unused_data_sharings_str;
+
 
                 // Handler functions
-#define OMP_DIRECTIVE(_directive, _name, _pred) \
-                void _name##_handler_pre(TL::PragmaCustomDirective); \
-                void _name##_handler_post(TL::PragmaCustomDirective);
-#define OMP_CONSTRUCT(_directive, _name, _pred) \
-                void _name##_handler_pre(TL::PragmaCustomStatement); \
-                void _name##_handler_post(TL::PragmaCustomStatement); \
-                void _name##_handler_pre(TL::PragmaCustomDeclaration); \
-                void _name##_handler_post(TL::PragmaCustomDeclaration);
-#define OMP_CONSTRUCT_NOEND(_directive, _name, _pred) \
-                OMP_CONSTRUCT(_directive, _name, _pred)
+#define DECL_DIRECTIVE(_directive, _name, _pred, _func_prefix) \
+                void _func_prefix##_name##_handler_pre(TL::PragmaCustomDirective); \
+                void _func_prefix##_name##_handler_post(TL::PragmaCustomDirective);
+
+#define DECL_CONSTRUCT(_directive, _name, _pred, _func_prefix) \
+                void _func_prefix##_name##_handler_pre(TL::PragmaCustomStatement); \
+                void _func_prefix##_name##_handler_post(TL::PragmaCustomStatement); \
+                void _func_prefix##_name##_handler_pre(TL::PragmaCustomDeclaration); \
+                void _func_prefix##_name##_handler_post(TL::PragmaCustomDeclaration);
+
+#define OMP_DIRECTIVE(_directive, _name, _pred) DECL_DIRECTIVE(_directive, _name, _pred, /*empty_prefix*/ )
+#define OMP_CONSTRUCT(_directive, _name, _pred) DECL_CONSTRUCT(_directive, _name, _pred, /*empty_prefix*/)
+#define OMP_CONSTRUCT_NOEND(_directive, _name, _pred) OMP_CONSTRUCT(_directive, _name, _pred)
 #include "tl-omp-constructs.def"
 #undef OMP_CONSTRUCT
 #undef OMP_CONSTRUCT_NOEND
 #undef OMP_DIRECTIVE
+
+#define OSS_DIRECTIVE(_directive, _name, _pred) DECL_DIRECTIVE(_directive, _name, _pred, oss_)
+#define OSS_CONSTRUCT(_directive, _name, _pred) DECL_CONSTRUCT(_directive, _name, _pred, oss_)
+#define OSS_CONSTRUCT_NOEND(_directive, _name, _pred) OSS_CONSTRUCT(_directive, _name, _pred)
+#include "tl-oss-constructs.def"
+#undef OSS_CONSTRUCT
+#undef OSS_CONSTRUCT_NOEND
+#undef OSS_DIRECTIVE
+
+#undef DECL_DIRECTIVE
+#undef DECL_CONSTRUCT
+                void taskloop_runtime_based_handler_pre(TL::PragmaCustomStatement directive);
+                void taskloop_runtime_based_handler_post(TL::PragmaCustomStatement directive);
 
                 void ompss_target_handler_pre(TL::PragmaCustomStatement stmt);
                 void ompss_target_handler_post(TL::PragmaCustomStatement stmt);
@@ -205,8 +202,12 @@ namespace TL
                         const TL::PragmaCustomStatement& directive,
                         Nodecl::List& execution_environment);
 
-                void register_omp();
-                void register_ompss();
+                void bind_omp_constructs();
+                void bind_oss_constructs();
+
+                //! This function is called before executing the OpenMP::Core phase.
+                //! It applies the OpenMP high level transformations, such as the collapse clause
+                void apply_openmp_high_level_transformations(Nodecl::NodeclBase translation_unit);
 
 #ifndef VECTORIZATION_DISABLED
                 void register_simd_function(
@@ -251,9 +252,6 @@ namespace TL
                 {
                     return _omp_report_file;
                 }
-
-                static std::string copy_direction_to_str(TL::OmpSs::CopyDirection kind);
-                static std::string dependence_direction_to_str(DependencyDirection kind);
 
                 void set_omp_report(bool b)
                 {

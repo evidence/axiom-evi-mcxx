@@ -35,6 +35,17 @@ namespace TL { namespace Nanos6 {
 
     class LoweringPhase : public TL::CompilerPhase
     {
+        private:
+
+            // This class represents Nanos6 implementation constants
+            struct ImplConstants
+            {
+                // Max number of dimensions supported in any kind of dependence clause
+                unsigned int api_max_dimensions;
+            };
+
+            ImplConstants _constants;
+
         public:
             LoweringPhase();
 
@@ -45,8 +56,18 @@ namespace TL { namespace Nanos6 {
 
             Nodecl::List &get_extra_c_code() { return _extra_c_code; }
 
+            unsigned int nanos6_api_max_dimensions() const;
+
         private:
-            void fortran_load_api(DTO& dto);
+            void fortran_preprocess_api(DTO& dto);
+            void fortran_fixup_api();
+
+            void compute_impl_constants();
+
+            std::string _final_clause_transformation_str;
+            bool _final_clause_transformation_disabled;
+            void set_disable_final_clause_transformation(const std::string& str);
+
 
             Nodecl::List _extra_c_code;
             
